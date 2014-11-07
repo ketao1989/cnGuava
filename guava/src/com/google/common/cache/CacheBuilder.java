@@ -38,22 +38,16 @@ import java.util.logging.Logger;
 import javax.annotation.CheckReturnValue;
 
 /**
- * <p>
- * A builder of {@link LoadingCache} and {@link Cache} instances having any combination of the following features:
- * 
- * <ul>
- * <li>automatic loading of entries into the cache
- * <li>least-recently-used eviction when a maximum size is exceeded
- * <li>time-based expiration of entries, measured since last access or last write
- * <li>keys automatically wrapped in {@linkplain WeakReference weak} references
- * <li>values automatically wrapped in {@linkplain WeakReference weak} or {@linkplain SoftReference soft} references
- * <li>notification of evicted (or otherwise removed) entries
- * <li>accumulation of cache access statistics
- * </ul>
- * 
- * <p>
- * These features are all optional; caches can be created using all or none of them. By default cache instances created
- * by {@code CacheBuilder} will not perform any type of eviction.
+ *LoadingCache 和Cache实例的构造器具备以下特性的组合：
+ * 1. 自动把entry加载进cache中；
+ * 2. 当超过最大大小时，会使用LRU来移除一些数据；
+ * 3. entry基于从上次访问或者写入之后计算的时间的过期机制；
+ * 4. 缓存key自动封装在WeakReference引用内
+ * 5. 缓存value自动封装在WeakReference引用内或者SoftReference引用内
+ * 6. 移除entry的通知
+ * 7. 缓存访问统计累计计算
+ *
+ * 以上这些特征是可选择的；在创建的时候可以使用所有或者一个都不要。默认使用CacheBuilder创建cache将不会执行任务类型的驱逐移除entry
  * 
  * <p>
  * Usage example:
@@ -72,7 +66,8 @@ import javax.annotation.CheckReturnValue;
  * 
  * <p>
  * Or equivalently,
- * 
+ * 下面这个通过一个以，分隔的字符串来创建cache的相关配置
+ *
  * <pre>
  * {
  *     &#064;code
@@ -87,42 +82,20 @@ import javax.annotation.CheckReturnValue;
  *             });
  * }
  * </pre>
- * 
- * <p>
- * The returned cache is implemented as a hash table with similar performance characteristics to
- * {@link ConcurrentHashMap}. It implements all optional operations of the {@link LoadingCache} and {@link Cache}
- * interfaces. The {@code asMap} view (and its collection views) have <i>weakly consistent iterators</i>. This means
- * that they are safe for concurrent use, but if other threads modify the cache after the iterator is created, it is
- * undefined which of these changes, if any, are reflected in that iterator. These iterators never throw
- * {@link ConcurrentModificationException}.
- * 
- * <p>
- * <b>Note:</b> by default, the returned cache uses equality comparisons (the {@link Object#equals equals} method) to
- * determine equality for keys or values. However, if {@link #weakKeys} was specified, the cache uses identity (
- * {@code ==}) comparisons instead for keys. Likewise, if {@link #weakValues} or {@link #softValues} was specified, the
- * cache uses identity comparisons for values.
- * 
- * <p>
- * Entries are automatically evicted from the cache when any of {@linkplain #maximumSize(long) maximumSize},
- * {@linkplain #maximumWeight(long) maximumWeight}, {@linkplain #expireAfterWrite expireAfterWrite},
- * {@linkplain #expireAfterAccess expireAfterAccess}, {@linkplain #weakKeys weakKeys}, {@linkplain #weakValues
- * weakValues}, or {@linkplain #softValues softValues} are requested.
- * 
- * <p>
- * If {@linkplain #maximumSize(long) maximumSize} or {@linkplain #maximumWeight(long) maximumWeight} is requested
- * entries may be evicted on each cache modification.
- * 
- * <p>
- * If {@linkplain #expireAfterWrite expireAfterWrite} or {@linkplain #expireAfterAccess expireAfterAccess} is requested
- * entries may be evicted on each cache modification, on occasional cache accesses, or on calls to {@link Cache#cleanUp}
- * . Expired entries may be counted by {@link Cache#size}, but will never be visible to read or write operations.
- * 
- * <p>
- * If {@linkplain #weakKeys weakKeys}, {@linkplain #weakValues weakValues}, or {@linkplain #softValues softValues} are
- * requested, it is possible for a key or value present in the cache to be reclaimed by the garbage collector. Entries
- * with reclaimed keys or values may be removed from the cache on each cache modification, on occasional cache accesses,
- * or on calls to {@link Cache#cleanUp}; such entries may be counted in {@link Cache#size}, but will never be visible to
- * read or write operations.
+ *
+ * 实现之后返回的cache和ConcurrentHashMap的性能特性是相近的。它实现了所有Cache和LoadingCache接口的可选择操作。
+ * asMap视图和他的集合试图有weakly连续的iterator。这意外着并发使用是安全的，但是如果其他线程在创建iterator之后修改了cache，
+ * 这些修改将是未定义的，并且这些修改不会抛出ConcurrentModificationException异常。
+ *
+ * 默认，返回的cache使用Object 的相等比较器来比较keys或者values。同样的，如果指定weakvalues或者softvalues，则cache使用==比较器给这些值。
+ *
+ * 当 maxinumSize，maxinumWeight，expireAfterWrite，expireAfterAccess，weakKeys，weakValues，或者 softValues 被访问的时候，
+ * entry会自动被移除缓存。
+ *
+ * 如果expireAfterWrite 和expireAfterAccess被请求，则在每次cache修改，临时的cache访问或者调用cleanuo时，entry可能会被移除。
+ * 过期的entry可能会被计算在size里面，但是一定不会被读或者写操作看见。
+ *
+ * 某些cache配置将会导致
  * 
  * <p>
  * Certain cache configurations will result in the accrual of periodic maintenance tasks which will be performed during
