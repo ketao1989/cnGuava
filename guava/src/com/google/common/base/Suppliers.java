@@ -243,6 +243,7 @@ public final class Suppliers {
   }
 
   /**
+   * 线程安全的get方法获取supplier对象
    * Returns a supplier whose {@code get()} method synchronizes on
    * {@code delegate} before calling it, making it thread-safe.
    */
@@ -274,6 +275,8 @@ public final class Suppliers {
   /**
    * Returns a function that accepts a supplier and returns the result of
    * invoking {@link Supplier#get} on that supplier.
+   * 
+   * 这里supplierFunction其实就是把T类型对象转为supplier<T>类型对象的方法。
    *
    * @since 8.0
    */
