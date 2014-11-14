@@ -61,7 +61,7 @@ public final class Suppliers {
     }
 
     @Override public T get() {
-      return function.apply(supplier.get());
+      return function.apply(supplier.get());// 这里调用具体的实现方法
     }
 
     @Override public boolean equals(@Nullable Object obj) {
@@ -84,17 +84,11 @@ public final class Suppliers {
   }
 
   /**
-   * Returns a supplier which caches the instance retrieved during the first
-   * call to {@code get()} and returns that value on subsequent calls to
-   * {@code get()}. See:
-   * <a href="http://en.wikipedia.org/wiki/Memoization">memoization</a>
-   *
-   * <p>The returned supplier is thread-safe. The supplier's serialized form
-   * does not contain the cached value, which will be recalculated when {@code
-   * get()} is called on the reserialized instance.
-   *
-   * <p>If {@code delegate} is an instance created by an earlier call to {@code
-   * memoize}, it is returned directly.
+   * 返回第一次调用get()方法时放到cache中的supplier实例，然后后来的调用get()方法都返回改值。
+   * 
+   * 返回的supplier是线程安全的。supplier的序列化方式不包含缓存值，每一次序列化实例调用get()方法时都会重新计算。
+   * 
+   * 如果delegate代理在先前已经调用get方法了，后面会直接返回。
    */
   public static <T> Supplier<T> memoize(Supplier<T> delegate) {
     return (delegate instanceof MemoizingSupplier)
@@ -105,7 +99,7 @@ public final class Suppliers {
   @VisibleForTesting
   static class MemoizingSupplier<T> implements Supplier<T>, Serializable {
     final Supplier<T> delegate;
-    transient volatile boolean initialized;
+    transient volatile boolean initialized;//不可被序列化的，标准是否被初始化调用的标志位
     // "value" does not need to be volatile; visibility piggy-backs
     // on volatile read of "initialized".
     transient T value;
@@ -116,6 +110,7 @@ public final class Suppliers {
 
     @Override public T get() {
       // A 2-field variant of Double Checked Locking.
+      // 这里是java常见的编码技巧--两次检查锁。也就是首先不加锁判断，然后获取锁之后，在判断一次，才会做处理。
       if (!initialized) {
         synchronized (this) {
           if (!initialized) {
