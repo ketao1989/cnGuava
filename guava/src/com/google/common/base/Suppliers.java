@@ -40,11 +40,8 @@ public final class Suppliers {
   private Suppliers() {}
 
   /**
-   * Returns a new supplier which is the composition of the provided function
-   * and supplier. In other words, the new supplier's value will be computed by
-   * retrieving the value from {@code supplier}, and then applying
-   * {@code function} to that value. Note that the resulting supplier will not
-   * call {@code supplier} or invoke {@code function} until it is called.
+   * 返回一个新的supplier，组合了给定的function和supplier。换言之。新的supplier的值将会是从给定的supplier
+   * 中提取出来然后经过function计算得到的。注意，这个结果supplier直到被调用的时候，才会调用supplier或者function。
    */
   public static <F, T> Supplier<T> compose(
       Function<? super F, T> function, Supplier<F> supplier) {
@@ -55,7 +52,7 @@ public final class Suppliers {
 
   private static class SupplierComposition<F, T>
       implements Supplier<T>, Serializable {
-    final Function<? super F, T> function;
+    final Function<? super F, T> function;// F 入参类型，T返回类型
     final Supplier<F> supplier;
 
     SupplierComposition(Function<? super F, T> function, Supplier<F> supplier) {
