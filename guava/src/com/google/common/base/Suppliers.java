@@ -26,6 +26,9 @@ import java.util.concurrent.TimeUnit;
 import javax.annotation.Nullable;
 
 /**
+ * 在该工具方法类中实现代码中，有大量的内部类，这些类都是只给静态方法提供实现，而不对外使用。并且这些内部类都是
+ * 静态的（为了在静态方法中调用吗？？）
+ * 
  * Useful suppliers.
  *
  * <p>All methods return serializable suppliers as long as they're given
@@ -102,7 +105,7 @@ public final class Suppliers {
     transient volatile boolean initialized;//不可被序列化的，标准是否被初始化调用的标志位
     // "value" does not need to be volatile; visibility piggy-backs
     // on volatile read of "initialized".
-    transient T value;
+    transient T value;// 这里也不需要序列化，但是这里没有使用volatile，因为一般判断initialzed后，会继续贪心获取value
 
     MemoizingSupplier(Supplier<T> delegate) {
       this.delegate = delegate;
@@ -132,14 +135,10 @@ public final class Suppliers {
   }
 
   /**
-   * Returns a supplier that caches the instance supplied by the delegate and
-   * removes the cached value after the specified time has passed. Subsequent
-   * calls to {@code get()} return the cached value if the expiration time has
-   * not passed. After the expiration time, a new value is retrieved, cached,
-   * and returned. See:
-   * <a href="http://en.wikipedia.org/wiki/Memoization">memoization</a>
+   * 使用delegate来返回缓存中的supplier实例，并且，在制定时间之后会移除该缓存值
+   * 。随后调用get()，就会重新获取，缓存和返回。
    *
-   * <p>The returned supplier is thread-safe. The supplier's serialized form
+   * 返回也是线程安全的。 The supplier's serialized form
    * does not contain the cached value, which will be recalculated when {@code
    * get()} is called on the reserialized instance.
    *
@@ -157,10 +156,10 @@ public final class Suppliers {
   @VisibleForTesting static class ExpiringMemoizingSupplier<T>
       implements Supplier<T>, Serializable {
     final Supplier<T> delegate;
-    final long durationNanos;
+    final long durationNanos;//有效时间
     transient volatile T value;
     // The special value 0 means "not yet initialized".
-    transient volatile long expirationNanos;
+    transient volatile long expirationNanos;//过期时间，简单的缓存有效期设置
 
     ExpiringMemoizingSupplier(
         Supplier<T> delegate, long duration, TimeUnit unit) {
@@ -171,22 +170,23 @@ public final class Suppliers {
 
     @Override public T get() {
       // Another variant of Double Checked Locking.
-      //
-      // We use two volatile reads.  We could reduce this to one by
-      // putting our fields into a holder class, but (at least on x86)
-      // the extra memory consumption and indirection are more
-      // expensive than the extra volatile reads.
+      //注意，这里是使用另一种方式的二次检查锁技巧
+      
+      //这里使用了两次volatile读，我们可以减少为一次，通过使用把我们的变量值放到一个拥有的类中；
+      //但是多余的内存消耗和迂回代价比多一个volatile读要更昂贵。
       long nanos = expirationNanos;
       long now = Platform.systemNanoTime();
-      if (nanos == 0 || now - nanos >= 0) {
+      if (nanos == 0 || now - nanos >= 0) {//已到过期时间或第一次
         synchronized (this) {
-          if (nanos == expirationNanos) {  // recheck for lost race
+          // 这个判断可以避免多余计算，主要原因是因为namos是线程局部（方法拥有的）的，而expirationNanos才是共有的（静态类拥有的），这样如果值被修改
+          // （下面会重新给这两个变量赋值，在一个线程里面两个值是一样的，但是两个线程是不会一样的）就可以看出来二个值是不一样的
+          if (nanos == expirationNanos) {  //由于如果其他线程变更，则会更改该值，导致这里判断条件不满足。 
             T t = delegate.get();
             value = t;
             nanos = now + durationNanos;
             // In the very unlikely event that nanos is 0, set it to 1;
             // no one will notice 1 ns of tardiness.
-            expirationNanos = (nanos == 0) ? 1 : nanos;
+            expirationNanos = (nanos == 0) ? 1 : nanos;//避免上面判断0的情况，所以这里设为1
             return t;
           }
         }
