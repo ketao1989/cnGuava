@@ -19,9 +19,8 @@ package com.google.common.base;
 import com.google.common.annotations.GwtCompatible;
 
 /**
- * A class that can supply objects of a single type.  Semantically, this could
- * be a factory, generator, builder, closure, or something else entirely. No
- * guarantees are implied by this interface.
+ * 这个类可以提供单个类型的对象s.理论上，这可以是一个工厂，生成器（generatoy），构造器（builder），闭包（closure）
+ * 或者其他相似的东西。这个接口没有隐式保证任何东西。
  *
  * @author Harry Heymann
  * @since 2.0 (imported from Google Collections Library)
@@ -29,9 +28,8 @@ import com.google.common.annotations.GwtCompatible;
 @GwtCompatible
 public interface Supplier<T> {
   /**
-   * Retrieves an instance of the appropriate type. The returned object may or
-   * may not be a new instance, depending on the implementation.
-   *
+   * 获取一个相应类型的对象。返回的对象可以使也可以不是一个新的实例，依赖各自的实现。
+   * 
    * @return an instance of the appropriate type
    */
   T get();
