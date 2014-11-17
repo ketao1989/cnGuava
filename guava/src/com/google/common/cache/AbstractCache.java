@@ -202,7 +202,7 @@ public abstract class AbstractCache<K, V> implements Cache<K, V> {
   }
 
   /**
-   * A thread-safe {@link StatsCounter} implementation for use by {@link Cache} implementors.
+   * 一个线程安全的StatsCounter实现，实现中使用了线程安全的对于Long类型数据的加法类。
    *
    * @since 10.0
    */

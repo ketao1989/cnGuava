@@ -19,6 +19,8 @@ package com.google.common.cache;
 import com.google.common.annotations.GwtCompatible;
 
 /**
+ * 抽象接口，对象可以并发对long类型数据执行加法
+ *
  * Abstract interface for objects that can concurrently add longs.
  * 
  * @author Louis Wasserman
