@@ -135,9 +135,7 @@ public interface Cache<K, V> {
   ConcurrentMap<K, V> asMap();
 
   /**
-   * 
-   * Performs any pending maintenance operations needed by the cache. Exactly which activities are
-   * performed -- if any -- is implementation-dependent.
+   * 执行缓存需要的一些待维护的操作，这个依赖具体实现。比如说一些统计数据需要清零重置等。
    */
   void cleanUp();
 }
