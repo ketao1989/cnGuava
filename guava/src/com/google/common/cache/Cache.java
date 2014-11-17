@@ -30,17 +30,13 @@ import java.util.concurrent.ExecutionException;
 import javax.annotation.Nullable;
 
 /**
- * A semi-persistent mapping from keys to values. Cache entries are manually added using
- * {@link #get(Object, Callable)} or {@link #put(Object, Object)}, and are stored in the cache until
- * either evicted or manually invalidated.
+ * 一个半持久化的从key到value映射。缓存entry使用get(Object, Callable)或者put(Object, Object)来手动添加，
+ * 然后存储在缓存中，直到被驱赶出来或者手动置为无效。
+ * 
+ *接口的实现期待是线程安全的，并且可以被多线程安全地访问。
  *
- * <p>Implementations of this interface are expected to be thread-safe, and can be safely accessed
- * by multiple concurrent threads.
- *
- * <p>Note that while this class is still annotated as {@link Beta}, the API is frozen from a
- * consumer's standpoint. In other words existing methods are all considered {@code non-Beta} and
- * won't be changed without going through an 18 month deprecation cycle; however new methods may be
- * added at any time.
+ * 需要注意的是虽然这个类上的注解为beta，但是从使用者的角度来讲，它是不会变化的。换句话说，就是这些方法都是非beta
+ * ，当然,新的方法会在任何时候加入到类中。
  *
  * @author Charles Fry
  * @since 10.0
@@ -50,8 +46,7 @@ import javax.annotation.Nullable;
 public interface Cache<K, V> {
 
   /**
-   * Returns the value associated with {@code key} in this cache, or {@code null} if there is no
-   * cached value for {@code key}.
+   * 返回在cache和key关联的值。如果没有对应的值，则返回null。
    *
    * @since 11.0
    */
@@ -59,13 +54,10 @@ public interface Cache<K, V> {
   V getIfPresent(Object key);
 
   /**
-   * Returns the value associated with {@code key} in this cache, obtaining that value from
-   * {@code valueLoader} if necessary. No observable state associated with this cache is modified
-   * until loading completes. This method provides a simple substitute for the conventional
-   * "if cached, return; otherwise create, cache and return" pattern.
-   *
-   * <p><b>Warning:</b> as with {@link CacheLoader#load}, {@code valueLoader} <b>must not</b> return
-   * {@code null}; it may either return a non-null value or throw an exception.
+   * 从缓存中返回对应的值，如果需要则从valueLoader中获取该值。和缓存关联的相状态直到加载完成才会观察到改变。
+   * 这个方法提供了一个传统实现的简单替换：“如果缓存命中，则返回；否则创建，缓存然后返回”模式。
+   * 
+   * 需要注意的是，CacheLoader#load和 valueLoader 一定不可以返回null，它可以返回个非null值或者抛出异常。
    *
    * @throws ExecutionException if a checked exception was thrown while loading the value
    * @throws UncheckedExecutionException if an unchecked exception was thrown while loading the
@@ -77,8 +69,7 @@ public interface Cache<K, V> {
   V get(K key, Callable<? extends V> valueLoader) throws ExecutionException;
 
   /**
-   * Returns a map of the values associated with {@code keys} in this cache. The returned map will
-   * only contain entries which are already present in the cache.
+   * 返回指定的keys在缓存中对应的values的map映射。这个返回map只会返回在缓存中已经存在的entrie..
    *
    * @since 11.0
    */
@@ -111,7 +102,7 @@ public interface Cache<K, V> {
   void invalidate(Object key);
 
   /**
-   * Discards any cached values for keys {@code keys}.
+   * 丢弃指定keys对应的饿所有缓存值。
    *
    * @since 11.0
    */
@@ -123,13 +114,12 @@ public interface Cache<K, V> {
   void invalidateAll();
 
   /**
-   * Returns the approximate number of entries in this cache.
+   * 返回缓存中entry的大概的数量。
    */
   long size();
 
   /**
-   * Returns a current snapshot of this cache's cumulative statistics. All stats are initialized
-   * to zero, and are monotonically increasing over the lifetime of the cache.
+   * 返回当前缓存累积统计的快照。所有统计被初始化为0，然后在缓生命周期中单调递增。
    *
    */
   CacheStats stats();
@@ -145,6 +135,7 @@ public interface Cache<K, V> {
   ConcurrentMap<K, V> asMap();
 
   /**
+   * 
    * Performs any pending maintenance operations needed by the cache. Exactly which activities are
    * performed -- if any -- is implementation-dependent.
    */
