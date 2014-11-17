@@ -30,12 +30,10 @@ import java.util.concurrent.ExecutionException;
 import javax.annotation.Nullable;
 
 /**
- * A semi-persistent mapping from keys to values. Cache entries are manually added using
- * {@link #get(Object, Callable)} or {@link #put(Object, Object)}, and are stored in the cache until
- * either evicted or manually invalidated.
- *
- * <p>Implementations of this interface are expected to be thread-safe, and can be safely accessed
- * by multiple concurrent threads.
+ * 一个半持久化的从key到value映射。缓存entry使用get(Object, Callable)或者put(Object, Object)来手动添加，
+ * 然后存储在缓存中，直到被驱赶出来或者手动置为无效。
+ * 
+ *接口的实现期待是线程安全的，并且可以被多线程安全地访问。
  *
  * <p>Note that while this class is still annotated as {@link Beta}, the API is frozen from a
  * consumer's standpoint. In other words existing methods are all considered {@code non-Beta} and
