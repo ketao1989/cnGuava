@@ -79,12 +79,6 @@ import javax.annotation.concurrent.GuardedBy;
 /**
  * 基于concurrentHashMap的LocalCache类，服务于CacheBuilder的内部缓存实现。
  * 
- * The concurrent hash map implementation built by {@link CacheBuilder}.
- * 
- * <p>
- * This implementation is heavily derived from revision 1.96 of <a
- * href="http://tinyurl.com/ConcurrentHashMap">ConcurrentHashMap.java</a>.
- * 
  * @author Charles Fry
  * @author Bob Lee ({@code com.google.common.collect.MapMaker})
  * @author Doug Lea ({@code ConcurrentHashMap})
@@ -93,32 +87,15 @@ import javax.annotation.concurrent.GuardedBy;
 class LocalCache<K, V> extends AbstractMap<K, V> implements ConcurrentMap<K, V> {
 
     /**
-     * 其实，LocalCache的并发策略和concurrentHashMap的并发策略是一致的，也是根据分段锁来提高并发能力。
+     * 其实，LocalCache的并发策略和concurrentHashMap的并发策略是一致的，也是根据分段锁来提高并发能力,分段锁可以很好的保证 并发读的效率。因此，该map支持非阻塞读和不同段之间并发写。
      * 
-     * 页面替换算法的数据结构保持Map偶尔的一致性。对一个segment写排序是一致的。对map进行更新和读不能直接反应在数据结构上。 这些数据结构被lock保护，批量操作而避免锁争抢。分摊成本。
+     * 如果最大的大小指定了，那么基于段来执行操作是最好的。使用页面替换算法来决定当map大小超过指定值时，哪些entries需要被驱赶出去。
      * 
-     * 使用LRU页面替换算法，原因是它的简单，高的命中率，以及O(1)的时间复杂度。需要说明的是，LRU算法是 基于页面而不是全局实现的，所以可能在命中率上不如全局LRU算法。
+     * 页面替换算法的数据结构保持Map临时一致性。对一个segment写排序是一致的。对map进行更新和读不能直接 反应在数据结构上。 这些数据结构被lock保护，批量操作而避免锁争抢。在线程之间传播的批量操作导致分摊成本
+     * 比不强制大小限制的操作要稍微高一点。
      * 
-     * The basic strategy is to subdivide the table among Segments, each of which itself is a concurrently readable hash
-     * table. The map supports non-blocking reads and concurrent writes across different segments.
+     * 使用LRU页面替换算法，原因是它的简单，高的命中率，以及O(1)的时间复杂度。需要说明的是， LRU算法是 基于页面而不是全局实现的，所以可能在命中率上不如全局LRU算法，但是应该基本相似。
      * 
-     * If a maximum size is specified, a best-effort bounding is performed per segment, using a page-replacement
-     * algorithm to determine which entries to evict when the capacity has been exceeded.
-     * 
-     * The page replacement algorithm's data structures are kept casually consistent with the map. The ordering of
-     * writes to a segment is sequentially consistent. An update to the map and recording of reads may not be
-     * immediately reflected on the algorithm's data structures. These structures are guarded by a lock and operations
-     * are applied in batches to avoid lock contention. The penalty of applying the batches is spread across threads so
-     * that the amortized cost is slightly higher than performing just the operation without enforcing the capacity
-     * constraint.
-     * 
-     * This implementation uses a per-segment queue to record a memento of the additions, removals, and accesses that
-     * were performed on the map. The queue is drained on writes and when it exceeds its capacity threshold.
-     * 
-     * The Least Recently Used page replacement algorithm was chosen due to its simplicity, high hit rate, and ability
-     * to be implemented with O(1) time complexity. The initial LRU implementation operates per-segment rather than
-     * globally for increased implementation simplicity. We expect the cache hit rate to be similar to that of a global
-     * LRU algorithm.
      */
 
     // Constants
@@ -136,9 +113,7 @@ class LocalCache<K, V> extends AbstractMap<K, V> implements ConcurrentMap<K, V> 
     static final int CONTAINS_VALUE_RETRIES = 3; // containsValue 最大重试次数
 
     /**
-     * Number of cache access operations that can be buffered per segment before the cache's recency ordering
-     * information is updated. This is used to avoid lock contention by recording a memento of reads and delaying a lock
-     * acquisition until the threshold is crossed or a mutation occurs.
+     * 每个段可以被buffer的缓存访问操作的数量，每个段在缓存按照内容更新次序排序的最近之前。 这个通过记录读记录和延迟锁获得直到设置的阈值被超过或者一个变化发生，避免锁竞争。
      * 
      * <p>
      * This must be a (2^n)-1 as it is used as a mask.
@@ -146,8 +121,7 @@ class LocalCache<K, V> extends AbstractMap<K, V> implements ConcurrentMap<K, V> 
     static final int DRAIN_THRESHOLD = 0x3F;// n=8,--63
 
     /**
-     * Maximum number of entries to be drained in a single cleanup run. This applies independently to the cleanup queue
-     * and both reference queues.
+     * 在单个cleanup运行里，消耗的最大entries数量。该数值是根据经验来设置的。
      */
     // TODO(fry): empirically optimize this
     static final int DRAIN_MAX = 16;
@@ -167,61 +141,57 @@ class LocalCache<K, V> extends AbstractMap<K, V> implements ConcurrentMap<K, V> 
      * Shift value for indexing within segments. Helps prevent entries that end up in the same segment from also ending
      * up in the same bucket.
      */
-    final int segmentShift;
+    final int segmentShift;// 在一个段里面的偏移量
 
     /** The segments, each of which is a specialized hash table. */
     final Segment<K, V>[] segments;
 
     /** The concurrency level. */
-    final int concurrencyLevel; //并发水平
+    final int concurrencyLevel; // 并发水平
 
     /** Strategy for comparing keys. */
-    final Equivalence<Object> keyEquivalence;
+    final Equivalence<Object> keyEquivalence;// 比较key的策略
 
     /** Strategy for comparing values. */
-    final Equivalence<Object> valueEquivalence;
+    final Equivalence<Object> valueEquivalence;// 比较值的策略
 
     /** Strategy for referencing keys. */
-    final Strength keyStrength;
+    final Strength keyStrength;//key引用的强度，SoftReference，WeakReference等
 
     /** Strategy for referencing values. */
     final Strength valueStrength;
 
     /** The maximum weight of this map. UNSET_INT if there is no maximum. */
-    final long maxWeight;
+    final long maxWeight;//map的最大权重
 
     /** Weigher to weigh cache entries. */
-    final Weigher<K, V> weigher;
+    final Weigher<K, V> weigher;//每个节点entries的权重
 
-    /** How long after the last access to an entry the map will retain that entry. */
-    final long expireAfterAccessNanos;
+    final long expireAfterAccessNanos;//在最近一次访问后，map保存该节点entry多长时间
 
-    /** How long after the last write to an entry the map will retain that entry. */
-    final long expireAfterWriteNanos;
+    final long expireAfterWriteNanos;//在最近一次写后，map保存该节点entry多长时间
 
-    /** How long after the last write an entry becomes a candidate for refresh. */
-    final long refreshNanos;
+    final long refreshNanos;//成为刷新候选者的时间，在最后依次写入之后
 
-    /** Entries waiting to be consumed by the removal listener. */
     // TODO(fry): define a new type which creates event objects and automates the clear logic
-    final Queue<RemovalNotification<K, V>> removalNotificationQueue;//等待removal listener监听器消费的Cache元素
+    final Queue<RemovalNotification<K, V>> removalNotificationQueue;// 等待removal listener监听器消费的entries节点群
 
     /**
      * A listener that is invoked when an entry is removed due to expiration or garbage collection of soft/weak entries.
      */
-    final RemovalListener<K, V> removalListener; //当一个节点元素因为过期或者软引用的垃圾回收时，调用一个监听器。
+    final RemovalListener<K, V> removalListener; // 当一个节点元素因为过期或者软引用的垃圾回收时，调用一个监听器。
 
     /** Measures time in a testable way. */
-    final Ticker ticker;
+    final Ticker ticker;//时间源
 
     /** Factory used to create new entries. */
-    final EntryFactory entryFactory; //工厂类创建新的节点
+    final EntryFactory entryFactory; // 工厂类创建新的节点
 
     /**
      * Accumulates global cache statistics. Note that there are also per-segments stats counters which must be
      * aggregated to obtain a global stats view.
      */
-    final StatsCounter globalStatsCounter;  //全局缓存统计
+    final StatsCounter globalStatsCounter; // 全局缓存统计
 
     /**
      * The default cache loader to use on loading operations.
@@ -230,6 +200,7 @@ class LocalCache<K, V> extends AbstractMap<K, V> implements ConcurrentMap<K, V> 
     final CacheLoader<? super K, V> defaultLoader;
 
     /**
+     * 从builder中获取相应的配置参数。
      * Creates a new, empty map with the specified strategy, initial capacity and concurrency level.
      */
     LocalCache(CacheBuilder<? super K, ? super V> builder, @Nullable CacheLoader<? super K, V> loader) {
@@ -261,6 +232,7 @@ class LocalCache<K, V> extends AbstractMap<K, V> implements ConcurrentMap<K, V> 
             initialCapacity = Math.min(initialCapacity, (int) maxWeight);
         }
 
+        // 找到最小2的次数的段数量，
         // Find the lowest power-of-two segmentCount that exceeds concurrencyLevel, unless
         // maximumSize/Weight is specified in which case ensure that each segment gets at least 10
         // entries. The special casing for size-based eviction is only necessary because that eviction
@@ -553,7 +525,7 @@ class LocalCache<K, V> extends AbstractMap<K, V> implements ConcurrentMap<K, V> 
         static EntryFactory getFactory(Strength keyStrength, boolean usesAccessQueue, boolean usesWriteQueue) {
             int flags = ((keyStrength == Strength.WEAK) ? WEAK_MASK : 0) | (usesAccessQueue ? ACCESS_MASK : 0)
                     | (usesWriteQueue ? WRITE_MASK : 0);
-            return factories[flags];
+            return factories[flags];//定位组合配置
         }
 
         /**
