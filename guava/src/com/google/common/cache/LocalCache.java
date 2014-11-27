@@ -292,6 +292,7 @@ class LocalCache<K, V> extends AbstractMap<K, V> implements ConcurrentMap<K, V> 
         return expireAfterWriteNanos > 0;
     }
 
+    // 表示设置了access访问超时参数设置
     boolean expiresAfterAccess() {
         return expireAfterAccessNanos > 0;
     }
@@ -353,7 +354,7 @@ class LocalCache<K, V> extends AbstractMap<K, V> implements ConcurrentMap<K, V> 
             @Override
             Equivalence<Object> defaultEquivalence() {
                 return Equivalence.equals();
-            }
+            }//会判断是否相等
         },
 
         SOFT {
@@ -367,7 +368,7 @@ class LocalCache<K, V> extends AbstractMap<K, V> implements ConcurrentMap<K, V> 
             @Override
             Equivalence<Object> defaultEquivalence() {
                 return Equivalence.identity();
-            }
+            }// 默认相等时直接判断为false
         },
 
         WEAK {
@@ -381,11 +382,11 @@ class LocalCache<K, V> extends AbstractMap<K, V> implements ConcurrentMap<K, V> 
             @Override
             Equivalence<Object> defaultEquivalence() {
                 return Equivalence.identity();
-            }
+            }// 默认相等时直接判断为false
         };
 
         /**
-         * Creates a reference for the given value according to this value strength.
+         * 根据给定的value 强度来创建该value 的引用
          */
         abstract <K, V> ValueReference<K, V> referenceValue(Segment<K, V> segment, ReferenceEntry<K, V> entry, V value,
                 int weight);
@@ -1021,6 +1022,9 @@ class LocalCache<K, V> extends AbstractMap<K, V> implements ConcurrentMap<K, V> 
      * Used for strongly-referenced keys.
      */
     static class StrongEntry<K, V> extends AbstractReferenceEntry<K, V> {
+
+        //这里其实就是strong引用的map entry，包括key，hash，value，和next（因为其实现是挂在segment上的一个链表）
+
         final K key;
 
         StrongEntry(K key, int hash, @Nullable ReferenceEntry<K, V> next) {
@@ -1068,6 +1072,7 @@ class LocalCache<K, V> extends AbstractMap<K, V> implements ConcurrentMap<K, V> 
 
         // The code below is exactly the same for each access entry type.
 
+        // 既然是访问的链表，就肯定需要记录access的时间了
         volatile long accessTime = Long.MAX_VALUE;
 
         @Override
@@ -1080,9 +1085,12 @@ class LocalCache<K, V> extends AbstractMap<K, V> implements ConcurrentMap<K, V> 
             this.accessTime = time;
         }
 
+        // 双向列表，和map中不一样，这里包含pre和next
         @GuardedBy("Segment.this")
         ReferenceEntry<K, V> nextAccess = nullEntry();
 
+        @GuardedBy("Segment.this")
+        ReferenceEntry<K, V> previousAccess = nullEntry();
         @Override
         public ReferenceEntry<K, V> getNextInAccessQueue() {
             return nextAccess;
@@ -1093,8 +1101,6 @@ class LocalCache<K, V> extends AbstractMap<K, V> implements ConcurrentMap<K, V> 
             this.nextAccess = next;
         }
 
-        @GuardedBy("Segment.this")
-        ReferenceEntry<K, V> previousAccess = nullEntry();
 
         @Override
         public ReferenceEntry<K, V> getPreviousInAccessQueue() {
@@ -1884,9 +1890,7 @@ class LocalCache<K, V> extends AbstractMap<K, V> implements ConcurrentMap<K, V> 
     }
 
     /**
-     * Notifies listeners that an entry has been automatically removed due to expiration, eviction, or eligibility for
-     * garbage collection. This should be called every time expireEntries or evictEntry is called (once the lock is
-     * released).
+     * 通知监听器，一个entry会因为超时，驱赶或者垃圾回收等被自动移除。在每一次超时对象或者驱赶对象被调用的时候调用这个通知器方法。
      */
     void processPendingNotifications() {
         RemovalNotification<K, V> notification;
