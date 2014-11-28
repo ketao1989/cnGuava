@@ -1065,6 +1065,8 @@ class LocalCache<K, V> extends AbstractMap<K, V> implements ConcurrentMap<K, V> 
         }
     }
 
+    //在对每个节点的更新操作都会将该节点重新链到write链和access链末尾，并且更新其writeTime和accessTime字段，
+    // 而没找到一个节点，都会将该节点重新链到access链末尾，并更新其accessTime字段
     static final class StrongAccessEntry<K, V> extends StrongEntry<K, V> {
         StrongAccessEntry(K key, int hash, @Nullable ReferenceEntry<K, V> next) {
             super(key, hash, next);
@@ -1863,6 +1865,8 @@ class LocalCache<K, V> extends AbstractMap<K, V> implements ConcurrentMap<K, V> 
 
     // queues
 
+    // guardedBy 注解只是告知 该方法被segment来保护，确保线程安全
+    // 我们知道，对于segment写操作时，会确保只有一个线程进行的。因此内部可以不需要额外的线程安全代码保护
     @GuardedBy("Segment.this")
     static <K, V> void connectAccessOrder(ReferenceEntry<K, V> previous, ReferenceEntry<K, V> next) {
         previous.setNextInAccessQueue(next);
@@ -3622,18 +3626,15 @@ class LocalCache<K, V> extends AbstractMap<K, V> implements ConcurrentMap<K, V> 
     }
 
     /**
-     * A custom queue for managing access order. Note that this is tightly integrated with {@code ReferenceEntry}, upon
-     * which it reliese to perform its linking.
-     * 
-     * <p>
-     * Note that this entire implementation makes the assumption that all elements which are in the map are also in this
-     * queue, and that all elements not in the queue are not in the map.
-     * 
-     * <p>
-     * The benefits of creating our own queue are that (1) we can replace elements in the middle of the queue as part of
-     * copyWriteEntry, and (2) the contains method is highly optimized for the current model.
+     * 为了管理访问排序而自定义的队列。这个队列围绕着ReferenceEntry建立的，其内部对象就是执行该Entry的链接。
+     *
+     * 需要注意的是，这里假设所有的在map里的元素必须都在queue队列中，并且不在map中的元素也不应该在queue中。
+     *
+     * 创建我们自己的queue好处：我们可以替换queue队列中间的元素（copyWriteEntry）；
+     * 此外，对于我们的模型，内部实现的方法都是高度优化的。（感觉目前没有什么queue实现能很好满足这里的需求）
      */
     static final class AccessQueue<K, V> extends AbstractQueue<ReferenceEntry<K, V>> {
+
         final ReferenceEntry<K, V> head = new AbstractReferenceEntry<K, V>() {
 
             @Override
@@ -3645,8 +3646,11 @@ class LocalCache<K, V> extends AbstractMap<K, V> implements ConcurrentMap<K, V> 
             public void setAccessTime(long time) {
             }
 
+            // head 的pre和next设置，这样子可以很好的检查queue是否为空
             ReferenceEntry<K, V> nextAccess = this;
+            ReferenceEntry<K, V> previousAccess = this;
 
+            // 这里维护两个队列，但是实际上，就是next的一串链接
             @Override
             public ReferenceEntry<K, V> getNextInAccessQueue() {
                 return nextAccess;
@@ -3657,7 +3661,7 @@ class LocalCache<K, V> extends AbstractMap<K, V> implements ConcurrentMap<K, V> 
                 this.nextAccess = next;
             }
 
-            ReferenceEntry<K, V> previousAccess = this;
+
 
             @Override
             public ReferenceEntry<K, V> getPreviousInAccessQueue() {
@@ -3672,6 +3676,7 @@ class LocalCache<K, V> extends AbstractMap<K, V> implements ConcurrentMap<K, V> 
 
         // implements Queue
 
+        // 接下来这些方法实现一个queue
         @Override
         public boolean offer(ReferenceEntry<K, V> entry) {
             // unlink
