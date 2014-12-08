@@ -975,6 +975,7 @@ class LocalCache<K, V> extends AbstractMap<K, V> implements ConcurrentMap<K, V> 
         return (ReferenceEntry<K, V>) NullEntry.INSTANCE;
     }
 
+    // 当我们在cache中没有使用write和access的相关特性，则使用该queue队列，当然主要是为了节约内存
     static final Queue<? extends Object> DISCARDING_QUEUE = new AbstractQueue<Object>() {
         @Override
         public boolean offer(Object o) {
@@ -1915,8 +1916,8 @@ class LocalCache<K, V> extends AbstractMap<K, V> implements ConcurrentMap<K, V> 
     // Inner Classes
 
     /**
-     * Segments are specialized versions of hash tables. This subclass inherits from ReentrantLock opportunistically,
-     * just to simplify some locking and avoid separate construction.
+     * segment是hash table的特殊版本。这个子类投机方式来继承了ReentrantLock，仅仅是为了简化一些locking，以及避免单独去构建代码。
+     *
      */
     @SuppressWarnings("serial")
     // This class is never serialized.
@@ -1928,6 +1929,7 @@ class LocalCache<K, V> extends AbstractMap<K, V> implements ConcurrentMap<K, V> 
          */
 
         /*
+         *
          * Segments maintain a table of entry lists that are ALWAYS kept in a consistent state, so can be read without
          * locking. Next fields of nodes are immutable (final). All list additions are performed at the front of each
          * bin. This makes it easy to check changes, and also fast to traverse. When nodes would otherwise be changed,
@@ -1948,42 +1950,45 @@ class LocalCache<K, V> extends AbstractMap<K, V> implements ConcurrentMap<K, V> 
         final LocalCache<K, V> map;
 
         /**
-         * The number of live elements in this segment's region.
+         * 该segment区域内所有存活的元素个数
          */
         volatile int count;
 
         /**
-         * The weight of the live elements in this segment's region.
+         * 该segment的区域内所有元素的权重和
          */
         @GuardedBy("Segment.this")
         long totalWeight;
 
         /**
-         * Number of updates that alter the size of the table. This is used during bulk-read methods to make sure they
-         * see a consistent snapshot: If modCounts change during a traversal of segments loading size or checking
-         * containsValue, then we might have an inconsistent view of state so (usually) must retry.
+         * 改变table大小size的更新次数。这个在批量读取方法期间保证它们可以看到一致性的快照：
+         * 如果modDCount在我们遍历段加载大小或者核对containsValue期间被改变了，然后我们会看到一个不一致的状态视图，以至于必须去重试。
+         *
+         * 感觉这里有点像是版本控制，比如数据库里的version字段来控制数据一致性
          */
         int modCount;
 
         /**
+         * 阈值，默认0.75
          * The table is expanded when its size exceeds this threshold. (The value of this field is always
          * {@code (int) (capacity * 0.75)}.)
          */
         int threshold;
 
         /**
+         * 每个段表，使用乐观锁的Array来保存entry
          * The per-segment table.
          */
         volatile AtomicReferenceArray<ReferenceEntry<K, V>> table;
 
         /**
-         * The maximum weight of this segment. UNSET_INT if there is no maximum.
+         * 对应段的最大权重。如果没有max则为UNSET_INT。
          */
         final long maxSegmentWeight;
 
         /**
-         * The key reference queue contains entries whose keys have been garbage collected, and which need to be cleaned
-         * up internally.
+         * referenceQueue队列包含的是一些需要被gc回收的entry，以及一些需要被内部clean up的entry
+         *
          */
         final ReferenceQueue<K> keyReferenceQueue;
 
@@ -3632,6 +3637,10 @@ class LocalCache<K, V> extends AbstractMap<K, V> implements ConcurrentMap<K, V> 
      *
      * 创建我们自己的queue好处：我们可以替换queue队列中间的元素（copyWriteEntry）；
      * 此外，对于我们的模型，内部实现的方法都是高度优化的。（感觉目前没有什么queue实现能很好满足这里的需求）
+     *
+     * 关于这里使用的queue模型：queue是一个循环双向列表，其中head的next指向queue list 首位，
+     * head的pre指向queue list的最后一个元素
+     *
      */
     static final class AccessQueue<K, V> extends AbstractQueue<ReferenceEntry<K, V>> {
 
@@ -3676,25 +3685,30 @@ class LocalCache<K, V> extends AbstractMap<K, V> implements ConcurrentMap<K, V> 
 
         // implements Queue
 
-        // 接下来这些方法实现一个queue
+        // 接下来这些方法实现一个queue，offer插入一个指定entry到queue中
         @Override
         public boolean offer(ReferenceEntry<K, V> entry) {
             // unlink
+            // 这里把前后两个元素链接起来，这样当前entry就自然移除queue了
             connectAccessOrder(entry.getPreviousInAccessQueue(), entry.getNextInAccessQueue());
 
             // add to tail
+            // 移除完了之后，把这个entry放在queue的尾部
+            // 在这里保证LRU策略，因此，gauva cache的LRU策略实际上是针对每个segment的。
             connectAccessOrder(head.getPreviousInAccessQueue(), entry);
             connectAccessOrder(entry, head);
 
             return true;
         }
 
+        // 获取队列的首部后元素，头尾都是head，所以head结束，queue模型参考类注释
         @Override
         public ReferenceEntry<K, V> peek() {
             ReferenceEntry<K, V> next = head.getNextInAccessQueue();
             return (next == head) ? null : next;
         }
 
+        // 移除队列首部后第一个元素
         @Override
         public ReferenceEntry<K, V> poll() {
             ReferenceEntry<K, V> next = head.getNextInAccessQueue();
@@ -3713,11 +3727,14 @@ class LocalCache<K, V> extends AbstractMap<K, V> implements ConcurrentMap<K, V> 
             ReferenceEntry<K, V> previous = e.getPreviousInAccessQueue();
             ReferenceEntry<K, V> next = e.getNextInAccessQueue();
             connectAccessOrder(previous, next);
-            nullifyAccessOrder(e);
+            nullifyAccessOrder(e);// 移除元素并置为null
 
+            // next正常操作后面会有entry对象的，否则为null说明queue是不存在该entry的
             return next != NullEntry.INSTANCE;
         }
 
+        // 同样，这边逻辑也是，单独entry的next为null，所以如果不在cache中，则不会有entry
+        // 此外， 等号也需要注意，这边根据reference强度来决定使用的==代码逻辑
         @Override
         @SuppressWarnings("unchecked")
         public boolean contains(Object o) {
@@ -3739,12 +3756,13 @@ class LocalCache<K, V> extends AbstractMap<K, V> implements ConcurrentMap<K, V> 
             return size;
         }
 
+        // 清queue数据
         @Override
         public void clear() {
             ReferenceEntry<K, V> e = head.getNextInAccessQueue();
             while (e != head) {
                 ReferenceEntry<K, V> next = e.getNextInAccessQueue();
-                nullifyAccessOrder(e);
+                nullifyAccessOrder(e);// 置为null，便于gc
                 e = next;
             }
 
