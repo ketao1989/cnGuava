@@ -78,7 +78,7 @@ import javax.annotation.concurrent.GuardedBy;
 
 /**
  * 基于concurrentHashMap的LocalCache类，服务于CacheBuilder的内部缓存实现。
- * 
+ *
  * @author Charles Fry
  * @author Bob Lee ({@code com.google.common.collect.MapMaker})
  * @author Doug Lea ({@code ConcurrentHashMap})
@@ -88,14 +88,14 @@ class LocalCache<K, V> extends AbstractMap<K, V> implements ConcurrentMap<K, V> 
 
     /**
      * 其实，LocalCache的并发策略和concurrentHashMap的并发策略是一致的，也是根据分段锁来提高并发能力,分段锁可以很好的保证 并发读的效率。因此，该map支持非阻塞读和不同段之间并发写。
-     * 
+     *
      * 如果最大的大小指定了，那么基于段来执行操作是最好的。使用页面替换算法来决定当map大小超过指定值时，哪些entries需要被驱赶出去。
-     * 
+     *
      * 页面替换算法的数据结构保持Map临时一致性。对一个segment写排序是一致的。对map进行更新和读不能直接 反应在数据结构上。 这些数据结构被lock保护，批量操作而避免锁争抢。在线程之间传播的批量操作导致分摊成本
      * 比不强制大小限制的操作要稍微高一点。
-     * 
+     *
      * 使用LRU页面替换算法，原因是它的简单，高的命中率，以及O(1)的时间复杂度。需要说明的是， LRU算法是 基于页面而不是全局实现的，所以可能在命中率上不如全局LRU算法，但是应该基本相似。
-     * 
+     *
      */
 
     // Constants
@@ -114,7 +114,7 @@ class LocalCache<K, V> extends AbstractMap<K, V> implements ConcurrentMap<K, V> 
 
     /**
      * 每个段可以被buffer的缓存访问操作的数量，每个段在缓存按照内容更新次序排序的最近之前。 这个通过记录读记录和延迟锁获得直到设置的阈值被超过或者一个变化发生，避免锁竞争。
-     * 
+     *
      * <p>
      * This must be a (2^n)-1 as it is used as a mask.
      */
@@ -530,7 +530,7 @@ class LocalCache<K, V> extends AbstractMap<K, V> implements ConcurrentMap<K, V> 
 
         /**
          * Creates a new entry.
-         * 
+         *
          * @param segment to create the entry for
          * @param key of the entry
          * @param hash of the key
@@ -541,7 +541,7 @@ class LocalCache<K, V> extends AbstractMap<K, V> implements ConcurrentMap<K, V> 
 
         /**
          * Copies an entry, assigning it a new {@code next} entry.
-         * 
+         *
          * @param original the entry to copy
          * @param newNext entry in the same bucket
          */
@@ -589,7 +589,7 @@ class LocalCache<K, V> extends AbstractMap<K, V> implements ConcurrentMap<K, V> 
         /**
          * Waits for a value that may still be loading. Unlike get(), this method can block (in the case of
          * FutureValueReference).
-         * 
+         *
          * @throws ExecutionException if the loading thread throws an exception
          * @throws ExecutionError if the loading thread throws an error
          */
@@ -609,7 +609,7 @@ class LocalCache<K, V> extends AbstractMap<K, V> implements ConcurrentMap<K, V> 
 
         /**
          * Creates a copy of this reference for the given entry.
-         * 
+         *
          * <p>
          * {@code value} may be null only for a loading reference.
          */
@@ -691,11 +691,11 @@ class LocalCache<K, V> extends AbstractMap<K, V> implements ConcurrentMap<K, V> 
 
     /**
      * An entry in a reference map.
-     * 
+     *
      * Entries in the map can be in the following states:
-     * 
+     *
      * Valid: - Live: valid key/value are set - Loading: loading is pending
-     * 
+     *
      * Invalid: - Expired: time expired (key/value may still be set) - Collected: key/value was partially collected, but
      * not yet cleaned up - Unset: marked as unset, awaiting cleanup or reuse
      */
@@ -1743,7 +1743,7 @@ class LocalCache<K, V> extends AbstractMap<K, V> implements ConcurrentMap<K, V> 
      * Applies a supplemental hash function to a given hash code, which defends against poor quality hash functions.
      * This is critical when the concurrent hash map uses power-of-two length hash tables, that otherwise encounter
      * collisions for hash codes that do not differ in lower or upper bits.
-     * 
+     *
      * @param h hash code
      */
     static int rehash(int h) {
@@ -1813,7 +1813,7 @@ class LocalCache<K, V> extends AbstractMap<K, V> implements ConcurrentMap<K, V> 
 
     /**
      * Returns the segment that should be used for a key with the given hash.
-     * 
+     *
      * @param hash the hash code for the key
      * @return the segment
      */
@@ -1907,6 +1907,9 @@ class LocalCache<K, V> extends AbstractMap<K, V> implements ConcurrentMap<K, V> 
         }
     }
 
+    /**
+     * 这里创建多个segment数组，和concurrentHashMap一样，线程安全使用基于segment细粒度锁维护。
+    */
     @SuppressWarnings("unchecked")
     final Segment<K, V>[] newSegmentArray(int ssize) {
         return new Segment[ssize];
@@ -1916,7 +1919,7 @@ class LocalCache<K, V> extends AbstractMap<K, V> implements ConcurrentMap<K, V> 
 
     /**
      * segment是hash table的特殊版本。这个子类投机方式来继承了ReentrantLock，仅仅是为了简化一些locking，以及避免单独去构建代码。
-     * 
+     *
      */
     @SuppressWarnings("serial")
     // This class is never serialized.
@@ -1961,7 +1964,7 @@ class LocalCache<K, V> extends AbstractMap<K, V> implements ConcurrentMap<K, V> 
         /**
          * 改变table大小size的更新次数。这个在批量读取方法期间保证它们可以看到一致性的快照：
          * 如果modDCount在我们遍历段加载大小或者核对containsValue期间被改变了，然后我们会看到一个不一致的状态视图，以至于必须去重试。
-         * 
+         *
          * 感觉这里有点像是版本控制，比如数据库里的version字段来控制数据一致性
          */
         int modCount;
@@ -1984,7 +1987,7 @@ class LocalCache<K, V> extends AbstractMap<K, V> implements ConcurrentMap<K, V> 
 
         /**
          * referenceQueue队列包含的是一些需要被gc回收的entry，以及一些需要被内部clean up的entry
-         * 
+         *
          */
         final ReferenceQueue<K> keyReferenceQueue;
 
@@ -2457,7 +2460,7 @@ class LocalCache<K, V> extends AbstractMap<K, V> implements ConcurrentMap<K, V> 
          * Records the relative order in which this read was performed by adding {@code entry} to the recency queue. At
          * write-time, or when the queue is full past the threshold, the queue will be drained and the entries therein
          * processed.
-         * 
+         *
          * <p>
          * Note: locked reads should use {@link #recordLockedRead}.
          */
@@ -2471,7 +2474,7 @@ class LocalCache<K, V> extends AbstractMap<K, V> implements ConcurrentMap<K, V> 
         /**
          * Updates the eviction metadata that {@code entry} was just read. This currently amounts to adding
          * {@code entry} to relevant eviction lists.
-         * 
+         *
          * <p>
          * Note: this method should only be called under lock, as it directly manipulates the eviction queues. Unlocked
          * reads should use {@link #recordRead}.
@@ -2603,7 +2606,7 @@ class LocalCache<K, V> extends AbstractMap<K, V> implements ConcurrentMap<K, V> 
 
         /**
          * AtomicReferenceArray 可以确保原子的更新引用的元素。
-         * 
+         *
          * 为给定的hash值返回第一个entry节点.
          */
         ReferenceEntry<K, V> getFirst(int hash) {
@@ -3328,7 +3331,7 @@ class LocalCache<K, V> extends AbstractMap<K, V> implements ConcurrentMap<K, V> 
         /**
          * Performs routine cleanup prior to executing a write. This should be called every time a write thread acquires
          * the segment lock, immediately after acquiring the lock.
-         * 
+         *
          * <p>
          * Post-condition: expireEntries has been run.
          */
@@ -3490,11 +3493,11 @@ class LocalCache<K, V> extends AbstractMap<K, V> implements ConcurrentMap<K, V> 
     /**
      * A custom queue for managing eviction order. Note that this is tightly integrated with {@code ReferenceEntry},
      * upon which it relies to perform its linking.
-     * 
+     *
      * <p>
      * Note that this entire implementation makes the assumption that all elements which are in the map are also in this
      * queue, and that all elements not in the queue are not in the map.
-     * 
+     *
      * <p>
      * The benefits of creating our own queue are that (1) we can replace elements in the middle of the queue as part of
      * copyWriteEntry, and (2) the contains method is highly optimized for the current model.
@@ -3627,13 +3630,13 @@ class LocalCache<K, V> extends AbstractMap<K, V> implements ConcurrentMap<K, V> 
 
     /**
      * 为了管理访问排序而自定义的队列。这个队列围绕着ReferenceEntry建立的，其内部对象就是执行该Entry的链接。
-     * 
+     *
      * 需要注意的是，这里假设所有的在map里的元素必须都在queue队列中，并且不在map中的元素也不应该在queue中。
-     * 
+     *
      * 创建我们自己的queue好处：我们可以替换queue队列中间的元素（copyWriteEntry）； 此外，对于我们的模型，内部实现的方法都是高度优化的。（感觉目前没有什么queue实现能很好满足这里的需求）
-     * 
+     *
      * 关于这里使用的queue模型：queue是一个循环双向列表，其中head的next指向queue list 首位， head的pre指向queue list的最后一个元素
-     * 
+     *
      */
     static final class AccessQueue<K, V> extends AbstractQueue<ReferenceEntry<K, V>> {
 
@@ -4470,7 +4473,7 @@ class LocalCache<K, V> extends AbstractMap<K, V> implements ConcurrentMap<K, V> 
     /**
      * Serializes the configuration of a LocalCache, reconsitituting it as a Cache using CacheBuilder upon
      * deserialization. An instance of this class is fit for use by the writeReplace of LocalManualCache.
-     * 
+     *
      * Unfortunately, readResolve() doesn't get called when a circular dependency is present, so the proxy must be able
      * to behave as the cache itself.
      */
@@ -4562,7 +4565,7 @@ class LocalCache<K, V> extends AbstractMap<K, V> implements ConcurrentMap<K, V> 
     /**
      * Serializes the configuration of a LocalCache, reconsitituting it as an LoadingCache using CacheBuilder upon
      * deserialization. An instance of this class is fit for use by the writeReplace of LocalLoadingCache.
-     * 
+     *
      * Unfortunately, readResolve() doesn't get called when a circular dependency is present, so the proxy must be able
      * to behave as the cache itself.
      */
