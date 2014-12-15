@@ -1810,7 +1810,9 @@ class LocalCache<K, V> extends AbstractMap<K, V> implements ConcurrentMap<K, V> 
     }
 
     /**
-     * 这个计算是获取一个entry hash属于哪个segment。根据并发水平的设置，计算2^n>concurrentLevel的n， 然后获取n个高位，计算segment 下标。jdk 7算法已更改，这里还是也jdk6的实现。
+     * 这个计算是获取一个entry hash属于哪个segment。根据并发水平的设置，计算2^n>concurrentLevel的n， 然后获取n个高位，计算segment 下标。
+     *
+     * jdk 7算法已更改，这里还是也jdk6的实现。
      * 
      * @param hash the hash code for the key
      * @return the segment
@@ -2219,12 +2221,20 @@ class LocalCache<K, V> extends AbstractMap<K, V> implements ConcurrentMap<K, V> 
                     statsCounter.recordMisses(1);// 处理命中率
                 }
             } else {
-                // 如果正在加载，则等待。。。
+                // 如果正在加载，则等待加载完成
                 // The entry already exists. Wait for loading.
                 return waitForLoadingValue(e, key, valueReference);
             }
         }
 
+        /**
+         * 该entry以及存在，等待完成，被加载进来
+         * @param e
+         * @param key
+         * @param valueReference
+         * @return
+         * @throws ExecutionException
+         */
         V waitForLoadingValue(ReferenceEntry<K, V> e, K key, ValueReference<K, V> valueReference)
                 throws ExecutionException {
             if (!valueReference.isLoading()) {
@@ -2234,13 +2244,13 @@ class LocalCache<K, V> extends AbstractMap<K, V> implements ConcurrentMap<K, V> 
             checkState(!Thread.holdsLock(e), "Recursive load of: %s", key);
             // don't consider expiration as we're concurrent with loading
             try {
-                V value = valueReference.waitForValue();
+                V value = valueReference.waitForValue();//获取value引用
                 if (value == null) {
                     throw new InvalidCacheLoadException("CacheLoader returned null for key " + key + ".");
                 }
                 // re-read ticker now that loading has completed
                 long now = map.ticker.read();
-                recordRead(e, now);
+                recordRead(e, now);// 处理access队列
                 return value;
             } finally {
                 statsCounter.recordMisses(1);
@@ -2266,6 +2276,7 @@ class LocalCache<K, V> extends AbstractMap<K, V> implements ConcurrentMap<K, V> 
                 @Override
                 public void run() {
                     try {
+                        //放在监听队列中异步执行
                         V newValue = getAndRecordStats(key, hash, loadingValueReference, loadingFuture);
                     } catch (Throwable t) {
                         logger.log(Level.WARNING, "Exception thrown during refresh", t);
@@ -3440,12 +3451,13 @@ class LocalCache<K, V> extends AbstractMap<K, V> implements ConcurrentMap<K, V> 
 
         // future获取值
         public ListenableFuture<V> loadFuture(K key, CacheLoader<? super K, V> loader) {
-            stopwatch.start();
+            stopwatch.start();//开始计算时间
             V previousValue = oldValue.get();
             try {
                 if (previousValue == null) {
-                    V newValue = loader.load(key);
-                    return set(newValue) ? futureValue : Futures.immediateFuture(newValue);
+                    V newValue = loader.load(key);//调用loader方法获取值
+                    //immediateFuture直接根据value值调用构造函数构造ListenableFuture对象
+                    return set(newValue) ? futureValue : Futures.immediateFuture(newValue);//设置future值，成功返回true；如果已经设置则返回false
                 }
                 ListenableFuture<V> newValue = loader.reload(key, previousValue);
                 if (newValue == null) {
@@ -3453,6 +3465,7 @@ class LocalCache<K, V> extends AbstractMap<K, V> implements ConcurrentMap<K, V> 
                 }
                 // To avoid a race, make sure the refreshed value is set into loadingValueReference
                 // *before* returning newValue from the cache query.
+                // 这段代码值得关注。就是set值，然后返回该值。
                 return Futures.transform(newValue, new Function<V, V>() {
                     @Override
                     public V apply(V newValue) {
