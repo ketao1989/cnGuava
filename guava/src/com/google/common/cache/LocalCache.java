@@ -2269,9 +2269,11 @@ class LocalCache<K, V> extends AbstractMap<K, V> implements ConcurrentMap<K, V> 
         // 对于给定的loadingValueReference最多只有一个调用loadSync/loadAsync
         ListenableFuture<V> loadAsync(final K key, final int hash,
                 final LoadingValueReference<K, V> loadingValueReference, CacheLoader<? super K, V> loader) {
+
+            // 异步调用load方法，返回Future对象
             final ListenableFuture<V> loadingFuture = loadingValueReference.loadFuture(key, loader);
 
-            // 这里使用异步的方式来返回load value
+            // 这里使用异步Listen的方式来获取future的 value
             loadingFuture.addListener(new Runnable() {
                 @Override
                 public void run() {
@@ -2294,7 +2296,7 @@ class LocalCache<K, V> extends AbstractMap<K, V> implements ConcurrentMap<K, V> 
                 ListenableFuture<V> newValue) throws ExecutionException {
             V value = null;
             try {
-                value = getUninterruptibly(newValue);
+                value = getUninterruptibly(newValue);//非中断方式调用future.get方法获取值
                 if (value == null) {
                     throw new InvalidCacheLoadException("CacheLoader returned null for key " + key + ".");
                 }
@@ -2835,17 +2837,25 @@ class LocalCache<K, V> extends AbstractMap<K, V> implements ConcurrentMap<K, V> 
         }
 
         /**
-         * Expands the table if possible.
+         * 如果需要并且没到限制大小，则扩展表table。
+         *
          */
         @GuardedBy("Segment.this")
         void expand() {
-            AtomicReferenceArray<ReferenceEntry<K, V>> oldTable = table;
+            AtomicReferenceArray<ReferenceEntry<K, V>> oldTable = table;//原子引用
             int oldCapacity = oldTable.length();
-            if (oldCapacity >= MAXIMUM_CAPACITY) {
+            if (oldCapacity >= MAXIMUM_CAPACITY) {// 无法扩容
                 return;
             }
 
-            /*
+            /**
+             * 把每个list的nodes分类到新的map中。 因为我们这里使用的是2的指数次扩容，所以在每个bin的元素，要么还是同样的index中待着，
+             * 要么移到2的指数个偏移。我们排除了不必要的节点创建（可以优化场景：因为老的节点们下一个fields不会被改变，所以老的节点可以被重复使用）。
+             *
+             * 以默认域设置来统计，当我们双倍扩展table时，仅仅只有六分之一的节点需要clone。这些节点将会被GC掉，
+             * 在他们不在被任务reader线程（这些线程可能正遍历在table的中间部分）引用的时候。
+             *
+             *
              * Reclassify nodes in each list to new Map. Because we are using power-of-two expansion, the elements from
              * each bin must either stay at same index, or move with a power of two offset. We eliminate unnecessary
              * node creation by catching cases where old nodes can be reused because their next fields won't change.
@@ -3046,16 +3056,19 @@ class LocalCache<K, V> extends AbstractMap<K, V> implements ConcurrentMap<K, V> 
             }
         }
 
+        /**
+         * 首先，这里是线程安全的。把key和value存放到cache中。
+         */
         boolean storeLoadedValue(K key, int hash, LoadingValueReference<K, V> oldValueReference, V newValue) {
             lock();
             try {
                 long now = map.ticker.read();
-                preWriteCleanup(now);
+                preWriteCleanup(now);//clean工作
 
                 int newCount = this.count + 1;
-                if (newCount > this.threshold) { // ensure capacity
+                if (newCount > this.threshold) { // 保证大小够用ensure capacity
                     expand();
-                    newCount = this.count + 1;
+                    newCount = this.count + 1;//扩容之后，count可能会变化
                 }
 
                 AtomicReferenceArray<ReferenceEntry<K, V>> table = this.table;
@@ -3348,8 +3361,7 @@ class LocalCache<K, V> extends AbstractMap<K, V> implements ConcurrentMap<K, V> 
         }
 
         /**
-         * Performs routine cleanup prior to executing a write. This should be called every time a write thread acquires
-         * the segment lock, immediately after acquiring the lock.
+         * 在执行write操作之前执行日常的clean工作，写线程必须有segment锁，然后在获取lock之后才能执行clean工作。
          * 
          * <p>
          * Post-condition: expireEntries has been run.
