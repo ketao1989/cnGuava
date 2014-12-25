@@ -73,6 +73,8 @@ import javax.annotation.Nullable;
 @Beta
 public final class Futures {
   /**
+   * 通过这里，可以看出sameThreadExecutor其实就是在创建这个线程上执行任务runnable，不要求另外创建线程去异步执行任务。
+   *
    * A 'same thread executor' that isn't an executor service and therefore cannot reject tasks.
    *
    * <p>Also, since it is a shared instance it should be generally cheaper and faster than
