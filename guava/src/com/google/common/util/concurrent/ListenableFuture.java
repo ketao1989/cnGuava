@@ -23,28 +23,17 @@ import java.util.concurrent.FutureTask;
 import java.util.concurrent.RejectedExecutionException;
 
 /**
- * A {@link Future} that accepts completion listeners.  Each listener has an
- * associated executor, and it is invoked using this executor once the future's
- * computation is {@linkplain Future#isDone() complete}.  If the computation has
- * already completed when the listener is added, the listener will execute
- * immediately.
- * 
- * <p>See the Guava User Guide article on <a href=
- * "http://code.google.com/p/guava-libraries/wiki/ListenableFutureExplained">
- * {@code ListenableFuture}</a>.
+ * 参考链接：http://ifeve.com/google-guava-listenablefuture/
  *
- * <h3>Purpose</h3>
+ * Future尝试去实现一些监听器listener。每个监听器有一个关联的executor，
+ * 然后一旦future的计算完成之后则使用这个executor调用执行listener。如果在listener加入的时候，计算已经完成了，
+ * 那么这个listener会立刻执行。
  *
- * <p>Most commonly, {@code ListenableFuture} is used as an input to another
- * derived {@code Future}, as in {@link Futures#allAsList(Iterable)
- * Futures.allAsList}. Many such methods are impossible to implement efficiently
- * without listener support.
+ * ListenableFuture继承自Future。其许多方法如果没有listener支持则不能实现功能。
  *
- * <p>It is possible to call {@link #addListener addListener} directly, but this
- * is uncommon because the {@code Runnable} interface does not provide direct
- * access to the {@code Future} result. (Users who want such access may prefer
- * {@link Futures#addCallback Futures.addCallback}.) Still, direct {@code
- * addListener} calls are occasionally useful:<pre>   {@code
+ * 可能会有直接调用addListener方法，但是这种方式不常见因为Runnable接口不提供直接访问Future结果。
+ * 然而，直接调用addListener有时候还是有用的。比如：
+ * <pre>   {@code
  *   final String name = ...;
  *   inFlight.add(name);
  *   ListenableFuture<Result> future = service.query(name);
@@ -59,25 +48,13 @@ import java.util.concurrent.RejectedExecutionException;
  *
  * <h3>How to get an instance</h3>
  *
- * <p>Developers are encouraged to return {@code ListenableFuture} from their
- * methods so that users can take advantages of the utilities built atop the
- * class. The way that they will create {@code ListenableFuture} instances
- * depends on how they currently create {@code Future} instances:
- * <ul>
- * <li>If they are returned from an {@code ExecutorService}, convert that
- * service to a {@link ListeningExecutorService}, usually by calling {@link
- * MoreExecutors#listeningDecorator(ExecutorService)
- * MoreExecutors.listeningDecorator}. (Custom executors may find it more
- * convenient to use {@link ListenableFutureTask} directly.)
- * <li>If they are manually filled in by a call to {@link FutureTask#set} or a
- * similar method, create a {@link SettableFuture} instead. (Users with more
- * complex needs may prefer {@link AbstractFuture}.)
- * </ul>
+ * 鼓励开发者从他们的方法返回ListenableFuture，这样用户可以利用公共创建类。比如，我们利用当前
+ * 已经创建的Future实例来创建ListenableFuture。
  *
- * <p>Occasionally, an API will return a plain {@code Future} and it will be
- * impossible to change the return type. For this case, we provide a more
- * expensive workaround in {@code JdkFutureAdapters}. However, when possible, it
- * is more efficient and reliable to create a {@code ListenableFuture} directly.
+ * 从 ExecutorService 转换为ListeningExecutorService，使用MoreExecutors#listeningDecorator(ExecutorService)；
+ * 如果调用FutureTask#set或者更简单的方法来填充，则创建SettableFuture（更复杂的是实现AbstractFuture）
+ *
+ * 直接创建ListenableFuture更高效和可靠，比JdkFutureAdapters而言。
  *
  * @author Sven Mawson
  * @author Nishant Thakkar
@@ -85,6 +62,8 @@ import java.util.concurrent.RejectedExecutionException;
  */
 public interface ListenableFuture<V> extends Future<V> {
   /**
+   * 注册一个listener成为Runnable来在给定的executor上执行。
+   *
    * Registers a listener to be {@linkplain Executor#execute(Runnable) run} on
    * the given executor.  The listener will run when the {@code Future}'s
    * computation is {@linkplain Future#isDone() complete} or, if the computation
