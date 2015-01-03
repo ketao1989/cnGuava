@@ -688,39 +688,38 @@ class LocalCache<K, V> extends AbstractMap<K, V> implements ConcurrentMap<K, V> 
     }
 
     /**
-     * An entry in a reference map.
-     * 
-     * Entries in the map can be in the following states:
-     * 
-     * Valid: - Live: valid key/value are set - Loading: loading is pending
-     * 
-     * Invalid: - Expired: time expired (key/value may still be set) - Collected: key/value was partially collected, but
-     * not yet cleaned up - Unset: marked as unset, awaiting cleanup or reuse
+     * 引用map中一个entry节点。
+     *
+     * 在map中得entries节点有下面几种状态：
+     * valid：-live：设置了有效的key/value;-loading：加载正在处理中....
+     * invalid：-expired：时间过期(但是key/value可能仍然设置了)；Collected：key/value部分被垃圾收集了，但是还没有被清除；
+     * -unset：标记为unset，表示等待清除或者重新使用。
+     *
      */
     interface ReferenceEntry<K, V> {
         /**
-         * Returns the value reference from this entry.
+         * 从entry中返回value引用
          */
         ValueReference<K, V> getValueReference();
 
         /**
-         * Sets the value reference for this entry.
+         * 为entry设置value引用
          */
         void setValueReference(ValueReference<K, V> valueReference);
 
         /**
-         * Returns the next entry in the chain.
+         * 返回链中下一个entry（解决hash碰撞存在链表）
          */
         @Nullable
         ReferenceEntry<K, V> getNext();
 
         /**
-         * Returns the entry's hash.
+         * 返回entry的hash
          */
         int getHash();
 
         /**
-         * Returns the key for this entry.
+         * 返回entry的key
          */
         @Nullable
         K getKey();
@@ -1956,7 +1955,7 @@ class LocalCache<K, V> extends AbstractMap<K, V> implements ConcurrentMap<K, V> 
 
         /**
          * 改变table大小size的更新次数。这个在批量读取方法期间保证它们可以看到一致性的快照：
-         * 如果modDCount在我们遍历段加载大小或者核对containsValue期间被改变了，然后我们会看到一个不一致的状态视图，以至于必须去重试。
+         * 如果modCount在我们遍历段加载大小或者核对containsValue期间被改变了，然后我们会看到一个不一致的状态视图，以至于必须去重试。
          * 
          * 感觉这里有点像是版本控制，比如数据库里的version字段来控制数据一致性
          */

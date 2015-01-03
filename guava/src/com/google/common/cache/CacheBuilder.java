@@ -122,6 +122,7 @@ import javax.annotation.CheckReturnValue;
  */
 @GwtCompatible(emulated = true)
 public final class CacheBuilder<K, V> {
+
     private static final int DEFAULT_INITIAL_CAPACITY = 16; // 默认的初始化Map大小
     private static final int DEFAULT_CONCURRENCY_LEVEL = 4; // 默认并发水平
     private static final int DEFAULT_EXPIRATION_NANOS = 0; // 默认超时
@@ -291,6 +292,10 @@ public final class CacheBuilder<K, V> {
         return this;
     }
 
+    /**
+     * 默认的key等同判断
+     * @return
+     */
     Equivalence<Object> getKeyEquivalence() {
         return firstNonNull(keyEquivalence, getKeyStrength().defaultEquivalence());
     }
@@ -309,12 +314,16 @@ public final class CacheBuilder<K, V> {
         return this;
     }
 
+    /**
+     * 默认value的等同判断
+     * @return
+     */
     Equivalence<Object> getValueEquivalence() {
         return firstNonNull(valueEquivalence, getValueStrength().defaultEquivalence());
     }
 
     /**
-     * 设置初始化hash表的最小表大小。concurrency level的值为8,表示其内部使用8个segment，也就是桶。在初始化估算的时候，提供足够的大的值可以避免 后期的重量级的resize操作带来的效率损失。
+     * 设置初始化hash表的最小表大小。concurrency level的值为8,表示其内部使用8个segment，也就是段。在初始化估算的时候，提供足够的大的值可以避免 后期的重量级的resize操作带来的效率损失。
      * 
      * Sets the minimum total size for the internal hash tables. For example, if the initial capacity is {@code 60}, and
      * the concurrency level is {@code 8}, then eight segments are created, each having a hash table of size eight.
@@ -535,6 +544,10 @@ public final class CacheBuilder<K, V> {
         return this;
     }
 
+    /**
+     * 默认的key引用
+     * @return
+     */
     Strength getKeyStrength() {
         return firstNonNull(keyStrength, Strength.STRONG);
     }
