@@ -689,10 +689,10 @@ class LocalCache<K, V> extends AbstractMap<K, V> implements ConcurrentMap<K, V> 
 
     /**
      * 引用map中一个entry节点。
-     *
+     * 
      * 在map中得entries节点有下面几种状态： valid：-live：设置了有效的key/value;-loading：加载正在处理中....
      * invalid：-expired：时间过期(但是key/value可能仍然设置了)；Collected：key/value部分被垃圾收集了，但是还没有被清除； -unset：标记为unset，表示等待清除或者重新使用。
-     *
+     * 
      */
     interface ReferenceEntry<K, V> {
         /**
@@ -1808,7 +1808,7 @@ class LocalCache<K, V> extends AbstractMap<K, V> implements ConcurrentMap<K, V> 
 
     /**
      * 这个计算是获取一个entry hash属于哪个segment。根据并发水平的设置，计算2^n>concurrentLevel的n， 然后获取n个高位，计算segment 下标。
-     *
+     * 
      * jdk 7算法已更改，这里还是也jdk6的实现。
      * 
      * @param hash the hash code for the key
@@ -2088,9 +2088,9 @@ class LocalCache<K, V> extends AbstractMap<K, V> implements ConcurrentMap<K, V> 
             checkState(weight >= 0, "Weights must be non-negative");
 
             ValueReference<K, V> valueReference = map.valueStrength.referenceValue(this, entry, value, weight);
-            entry.setValueReference(valueReference);
+            entry.setValueReference(valueReference);// 老的值被新的值替换掉
             recordWrite(entry, weight, now); // 更新access队列和write队列
-            previous.notifyNewValue(value); // 老的值被新的值替换掉
+            previous.notifyNewValue(value);
         }
 
         // loading
@@ -2299,7 +2299,7 @@ class LocalCache<K, V> extends AbstractMap<K, V> implements ConcurrentMap<K, V> 
                     throw new InvalidCacheLoadException("CacheLoader returned null for key " + key + ".");
                 }
                 statsCounter.recordLoadSuccess(loadingValueReference.elapsedNanos());
-                //线程安全地把key和value存放到cache中。
+                // 线程安全地把key和value存放到cache中。
                 storeLoadedValue(key, hash, loadingValueReference, value);
                 return value;
             } finally {
@@ -2377,7 +2377,7 @@ class LocalCache<K, V> extends AbstractMap<K, V> implements ConcurrentMap<K, V> 
                         // continue returning old value while loading
                         ++modCount;
                         LoadingValueReference<K, V> loadingValueReference = new LoadingValueReference<K, V>(
-                                valueReference);//使用老的值引用
+                                valueReference);// 使用老的值引用
                         e.setValueReference(loadingValueReference);
                         return loadingValueReference;
                     }
@@ -2385,10 +2385,10 @@ class LocalCache<K, V> extends AbstractMap<K, V> implements ConcurrentMap<K, V> 
 
                 ++modCount;
                 LoadingValueReference<K, V> loadingValueReference = new LoadingValueReference<K, V>();
-                e = newEntry(key, hash, first);//一个新的节点，存放的hash链头部
+                e = newEntry(key, hash, first);// 一个新的节点，存放的hash链头部
                 e.setValueReference(loadingValueReference);
                 table.set(index, e);// 插入到列表中
-                return loadingValueReference;//返回新的值引用
+                return loadingValueReference;// 返回新的值引用
             } finally {
                 unlock();
                 postWriteCleanup();
@@ -2604,7 +2604,7 @@ class LocalCache<K, V> extends AbstractMap<K, V> implements ConcurrentMap<K, V> 
                 return;
             }
 
-            //清除recencyQueue队列，按照指定的相关顺序来读取entries并且更新驱赶的元数据。
+            // 清除recencyQueue队列，按照指定的相关顺序来读取entries并且更新驱赶的元数据。
             // 把他们加到相关的evict列表 （这表明他们可以被移除出map中，由于被加到了recencyQueue队列中。）
             drainRecencyQueue();
             while (totalWeight > maxSegmentWeight) { // 当总的权重大于设置的最大段权重，才会执行remove操作
@@ -2836,7 +2836,7 @@ class LocalCache<K, V> extends AbstractMap<K, V> implements ConcurrentMap<K, V> 
 
         /**
          * 如果需要并且没到限制大小，则扩展表table。
-         *
+         * 
          */
         @GuardedBy("Segment.this")
         void expand() {
@@ -2849,9 +2849,9 @@ class LocalCache<K, V> extends AbstractMap<K, V> implements ConcurrentMap<K, V> 
             /**
              * 把每个list的nodes分类到新的map中。 因为我们这里使用的是2的指数次扩容，所以在每个bin的元素，要么还是同样的index中待着，
              * 要么移到2的指数个偏移。我们排除了不必要的节点创建（可以优化场景：因为老的节点们下一个fields不会被改变，所以老的节点可以被重复使用）。
-             *
+             * 
              * 以默认域设置来统计，当我们双倍扩展table时，仅仅只有六分之一的节点需要clone。这些节点将会被GC掉， 在他们不在被任务reader线程（这些线程可能正遍历在table的中间部分）引用的时候。
-             *
+             * 
              */
 
             int newCount = count;
@@ -3065,34 +3065,42 @@ class LocalCache<K, V> extends AbstractMap<K, V> implements ConcurrentMap<K, V> 
                 int index = hash & (table.length() - 1);
                 ReferenceEntry<K, V> first = table.get(index);
 
+                // 如果当前segment中已经存在了该key元素
                 for (ReferenceEntry<K, V> e = first; e != null; e = e.getNext()) {
                     K entryKey = e.getKey();
+                    // 找到hash链中对应的相等节点,则add操作;但是如果value是活跃的,则先移除
                     if (e.getHash() == hash && entryKey != null && map.keyEquivalence.equivalent(key, entryKey)) {
                         ValueReference<K, V> valueReference = e.getValueReference();
                         V entryValue = valueReference.get();
-                        // replace the old LoadingValueReference if it's live, otherwise
-                        // perform a putIfAbsent
+
+                        // 实现就有value引用的情况下
                         if (oldValueReference == valueReference || (entryValue == null && valueReference != UNSET)) {
                             ++modCount;
+                            // 首先如果value引用活跃,则让放入等待GC回收队列中,等待被回收.
                             if (oldValueReference.isActive()) {
                                 RemovalCause cause = (entryValue == null) ? RemovalCause.COLLECTED
                                         : RemovalCause.REPLACED;
+                                // 如果监听类配置了,则这里会触发监听方法响应
                                 enqueueNotification(key, hash, oldValueReference, cause);
                                 newCount--;
                             }
+                            // 更新新的值引用,如上所述,如果有老值,不直接删除,让GC回收.
+                            // 这里会操作访问队列和写队列,还有其他对外的抽象监听方法调用等
                             setValue(e, key, newValue, now);
-                            this.count = newCount; // write-volatile
-                            evictEntries();
+                            this.count = newCount; // write-volatile,确保modCount能及时写入共享内存中
+                            evictEntries();// 移除操作,put方法也调用.
                             return true;
                         }
 
-                        // the loaded value was already clobbered
+                        //那如果value引用已经没有了呢?!也就是value引用已经被回收了,而不只是value值为null
+                        // 新建一个value引用就好了呀?为什么返回false呢???
                         valueReference = new WeightedStrongValueReference<K, V>(newValue, 0);
                         enqueueNotification(key, hash, valueReference, RemovalCause.REPLACED);
                         return false;
                     }
                 }
 
+                // 如果事先segment数组中没有该key,则新建一个节点entry
                 ++modCount;
                 ReferenceEntry<K, V> newEntry = newEntry(key, hash, first);
                 setValue(newEntry, key, newValue, now);
