@@ -70,7 +70,6 @@
             <goals><goal>unpack-dependencies</goal></goals>
             <configuration>
               <includeArtifactIds>srczip</includeArtifactIds>
-              <overWrite>true</overWrite>
               <outputDirectory>${project.build.directory}/jdk-sources</outputDirectory>
               <silent>false</silent>
             </configuration>
