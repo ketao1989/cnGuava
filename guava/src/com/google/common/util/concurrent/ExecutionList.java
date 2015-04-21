@@ -90,7 +90,7 @@ public final class ExecutionList {
     // We only add to the list if we have not yet started execution.
     synchronized (this) {
       if (!executed) {
-        runnables = new RunnableExecutorPair(runnable, executor, runnables);
+        runnables = new RunnableExecutorPair(runnable, executor, runnables);// 新的执行对象，放在pair链表的头部
         return;
       }
     }
@@ -98,7 +98,7 @@ public final class ExecutionList {
     // getting called before some of the previously added runnables, but we're
     // OK with that.  If we want to change the contract to guarantee ordering
     // among runnables we'd have to modify the logic here to allow it.
-    executeListener(runnable, executor);
+    executeListener(runnable, executor);//立刻执行，如果当前executor没有执行runnbale
   }
 
   /**
@@ -123,7 +123,7 @@ public final class ExecutionList {
       }
       executed = true;
       list = runnables;
-      runnables = null;  // allow GC to free listeners even if this stays around for a while.
+      runnables = null;  // 允许对空闲的listener进行GC，即使这需要等一会
     }
     // If we succeeded then list holds all the runnables we to execute.  The pairs in the stack are
     // in the opposite order from how they were added so we need to reverse the list to fulfill our

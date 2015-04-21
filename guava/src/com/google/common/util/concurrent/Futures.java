@@ -58,6 +58,8 @@ import java.util.logging.Logger;
 import javax.annotation.Nullable;
 
 /**
+ * 关于Future接口的静态工具方法
+ *
  * Static utility methods pertaining to the {@link Future} interface.
  *
  * <p>Many of these methods use the {@link ListenableFuture} API; consult the
@@ -89,6 +91,8 @@ public final class Futures {
   private Futures() {}
 
   /**
+   * 把一个ListenableFuture 换行为一个 checked 的Future，可以把所有异常，转换为合适的checked异常。
+   *
    * Creates a {@link CheckedFuture} out of a normal {@link ListenableFuture}
    * and a {@link Function} that maps from {@link Exception} instances into the
    * appropriate checked type.
@@ -105,6 +109,10 @@ public final class Futures {
     return new MappingCheckedFuture<V, X>(checkNotNull(future), mapper);
   }
 
+    /**
+     * 抽象的原始直接 Future
+     * @param <V>
+     */
   private abstract static class ImmediateFuture<V>
       implements ListenableFuture<V> {
 
@@ -150,6 +158,7 @@ public final class Futures {
     }
   }
 
+    // 成功执行的future
   private static class ImmediateSuccessfulFuture<V> extends ImmediateFuture<V> {
 
     @Nullable private final V value;
@@ -164,6 +173,7 @@ public final class Futures {
     }
   }
 
+    // 成功的check future
   private static class ImmediateSuccessfulCheckedFuture<V, X extends Exception>
       extends ImmediateFuture<V> implements CheckedFuture<V, X> {
 
@@ -190,6 +200,7 @@ public final class Futures {
     }
   }
 
+    // 失败的future，直接跑异常
   private static class ImmediateFailedFuture<V> extends ImmediateFuture<V> {
 
     private final Throwable thrown;
@@ -204,6 +215,7 @@ public final class Futures {
     }
   }
 
+    // 取消的future
   private static class ImmediateCancelledFuture<V> extends ImmediateFuture<V> {
 
     private final CancellationException thrown;
@@ -224,6 +236,7 @@ public final class Futures {
     }
   }
 
+    //失败的checked future
   private static class ImmediateFailedCheckedFuture<V, X extends Exception>
       extends ImmediateFuture<V> implements CheckedFuture<V, X> {
 
@@ -251,6 +264,8 @@ public final class Futures {
   }
 
   /**
+   * 不能取消或者超时，并且isDone常常为true
+   *
    * Creates a {@code ListenableFuture} which has its value set immediately upon
    * construction. The getters just return the value. This {@code Future} can't
    * be canceled or timed out and its {@code isDone()} method always returns
@@ -261,6 +276,8 @@ public final class Futures {
   }
 
   /**
+   * 不能取消或者超时，并且isDone常常为true
+   *
    * Returns a {@code CheckedFuture} which has its value set immediately upon
    * construction.
    *
@@ -274,6 +291,11 @@ public final class Futures {
   }
 
   /**
+   *
+   * 失败的这种future，在我们返回future的时候，很有用。当出现异常失败的时候，返回这种初始化的失败。
+   *
+   * 这样，在我们获取get返回的时候，就可以抛出异常。
+   *
    * Returns a {@code ListenableFuture} which has an exception set immediately
    * upon construction.
    *
@@ -289,6 +311,8 @@ public final class Futures {
   }
 
   /**
+   * 创建一个取消状态的future
+   *
    * Creates a {@code ListenableFuture} which is cancelled immediately upon
    * construction, so that {@code isCancelled()} always returns {@code true}.
    *
@@ -315,6 +339,8 @@ public final class Futures {
   }
 
   /**
+   * 返回一个future，从给定的优先input中获取结果，但是，如果优先的输入失败了，则获取通过fallback提供的结果。
+   *
    * Returns a {@code Future} whose result is taken from the given primary
    * {@code input} or, if the primary input fails, from the {@code Future}
    * provided by the {@code fallback}. {@link FutureFallback#create} is not
@@ -392,6 +418,11 @@ public final class Futures {
   }
 
   /**
+   * fallback 主流程的方式，当我们指定executor的时候，走这个逻辑。
+   *
+   * 当然，一般我们在执行fallback的成本比较低，可以考虑上面的方法；
+   * 但是，如果成本比较大，重量级的，还是使用这个方法指定executor。
+   *
    * Returns a {@code Future} whose result is taken from the given primary
    * {@code input} or, if the primary input fails, from the {@code Future}
    * provided by the {@code fallback}. {@link FutureFallback#create} is not
@@ -457,6 +488,8 @@ public final class Futures {
   }
 
   /**
+   * 上面的方法，所有使用fallback，都new 这个类
+   *
    * A future that falls back on a second, generated future, in case its
    * original future fails.
    */
@@ -1799,8 +1832,8 @@ public final class Futures {
   }
 
   /**
-   * A checked future that uses a function to map from exceptions to the
-   * appropriate checked type.
+   * 使用一个function把exceptions 转换到合适的checked类型异常。
+   *
    */
   private static class MappingCheckedFuture<V, X extends Exception> extends
       AbstractCheckedFuture<V, X> {

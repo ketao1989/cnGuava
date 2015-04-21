@@ -25,11 +25,11 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 
 /**
- * A {@code CheckedFuture} is a {@link ListenableFuture} that includes versions
- * of the {@code get} methods that can throw a checked exception.  This makes it
- * easier to create a future that executes logic which can throw an exception.
+ * CheckedFuture 是 ListenableFuture 接口实现版本中，在get方法中，可以抛出一个 checked 异常。
+ * 这样可以创建一个可以抛出异常的future逻辑。
  *
- * <p>A common implementation is {@link Futures#immediateCheckedFuture}.
+ * 关于这个接口的实现，可以参考 {@link Futures#immediateCheckedFuture}
+ *
  *
  * <p>Implementations of this interface must adapt the exceptions thrown by
  * {@code Future#get()}: {@link CancellationException},
